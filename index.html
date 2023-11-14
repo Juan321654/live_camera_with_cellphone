@@ -2,14 +2,47 @@
 <html>
 <style>
      img {
-          width: 50%;
+          width: 30%;
      }
 
-     #rotate-button {
+     video {
+          width: 100%;
+     }
+
+     button {
           display: block;
           margin: 10px auto;
           padding: 1rem 2rem;
           font-size: 1.5rem;
+     }
+
+     .buttons {
+          display: flex;
+          gap: 5rem;
+     }
+
+     /* Style for the streaming indicator button */
+     .streaming-indicator {
+          background-color: red;
+          color: white;
+          border: none;
+          border-radius: 5px;
+          padding: 1rem 2rem;
+          font-size: 1.5rem;
+          cursor: not-allowed;
+     }
+
+     .streaming {
+          background-color: green;
+          cursor: default;
+     }
+
+     /* Media query for smaller screens (e.g., cellphones) */
+     @media screen and (max-width: 1200px) {
+          img {
+               width: 100%;
+               /* Set button width to 100% for smaller screens */
+          }
      }
 </style>
 
@@ -20,6 +53,7 @@
           document.addEventListener('DOMContentLoaded', function () {
                const socket = io();
                let rotationDegrees = 0; // Initialize rotation degrees
+               let streamingStarted = false; // Flag to track whether streaming has started
 
                // Function to get the rear camera stream
                function getRearCameraStream() {
@@ -41,35 +75,51 @@
 
                // Function to capture the video frame and emit it to the server
                function captureAndSend() {
-                    const video = document.querySelector('video');
-                    const canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext('2d');
+                    if (streamingStarted) {
+                         const video = document.querySelector('video');
+                         const canvas = document.createElement('canvas');
+                         canvas.width = video.videoWidth;
+                         canvas.height = video.videoHeight;
+                         const ctx = canvas.getContext('2d');
 
-                    // Rotate the canvas before drawing the video frame
-                    ctx.save();
-                    ctx.translate(canvas.width / 2, canvas.height / 2);
-                    ctx.rotate((rotationDegrees * Math.PI) / 180); // Convert degrees to radians
-                    ctx.drawImage(video, -canvas.width / 2, -canvas.height / 2);
-                    ctx.restore();
+                         // Rotate the canvas before drawing the video frame
+                         ctx.save();
+                         ctx.translate(canvas.width / 2, canvas.height / 2);
+                         ctx.rotate((rotationDegrees * Math.PI) / 180); // Convert degrees to radians
+                         ctx.drawImage(video, -canvas.width / 2, -canvas.height / 2);
+                         ctx.restore();
 
-                    const data = canvas.toDataURL('image/png');
-                    socket.emit('stream', data);
+                         const data = canvas.toDataURL('image/png');
+                         socket.emit('stream', data);
+                    }
                }
 
-               getRearCameraStream()
-                    .then(stream => {
-                         const video = document.querySelector('video');
-                         video.srcObject = stream;
-                         video.play();
+               // Add a button click event handler to request camera permission and start streaming
+               const startStreamingButton = document.getElementById('start-streaming-button');
+               const streamingIndicator = document.getElementById('streaming-indicator');
+               const rotationDegreeSpan = document.getElementById('rotation-degrees');
 
-                         // Capture and send the frame every 100ms (adjust as needed)
-                         setInterval(captureAndSend, 100);
-                    })
-                    .catch(err => {
-                         console.error('Error accessing camera:', err);
-                    });
+               startStreamingButton.addEventListener('click', () => {
+                    if (!streamingStarted) {
+                         getRearCameraStream()
+                              .then(stream => {
+                                   const video = document.querySelector('video');
+                                   video.srcObject = stream;
+                                   video.play();
+                                   streamingStarted = true;
+
+                                   // Capture and send the frame every 100ms (adjust as needed)
+                                   setInterval(captureAndSend, 100);
+                                   streamingIndicator.textContent = 'Streaming';
+                                   streamingIndicator.classList.add('streaming');
+                                   startStreamingButton.disabled = true;
+                                   userVideo.style.display = 'block'; // Display the video for the user streaming
+                              })
+                              .catch(err => {
+                                   console.error('Error accessing camera:', err);
+                              });
+                    }
+               });
 
                socket.on('stream', (image) => {
                     // Assuming you have an img element with id 'stream'
@@ -84,15 +134,24 @@
                     if (rotationDegrees >= 360) {
                          rotationDegrees = 0; // Reset to 0 degrees after 360 degrees
                     }
+                    // Update the rotation degree span content
+                    rotationDegreeSpan.textContent = `Rotation Degrees: ${rotationDegrees}`;
                });
           });
      </script>
 </head>
 
 <body>
-     <video style="display:none;" autoplay></video> <!-- Hidden video element for capturing the stream -->
+     <video id="userVideo" autoplay style="display:none;"></video>
      <img id="stream" alt="Streaming video"> <!-- Display incoming stream here -->
-     <button id="rotate-button">Rotate 90 Degrees</button> <!-- Button to rotate the screen -->
+     <div class="buttons">
+          <button id="rotate-button">Rotate 90 Degrees</button> <!-- Button to rotate the screen -->
+          <button id="start-streaming-button">Start Streaming</button>
+          <!-- Add the streaming indicator button -->
+          <button id="streaming-indicator" class="streaming-indicator">Not Streaming</button>
+          <!-- Display the current rotation degrees -->
+     </div>
+     <h2 id="rotation-degrees">Rotation Degrees: 0</h2>
 </body>
 
 </html>
